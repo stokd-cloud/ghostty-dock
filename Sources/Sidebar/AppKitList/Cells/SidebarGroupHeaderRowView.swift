@@ -92,6 +92,26 @@ final class SidebarGroupHeaderTableCellView: NSTableCellView {
         fatalError("init(coder:) has not been implemented")
     }
 
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        if window == nil { suspendPresentation() }
+    }
+
+    func suspendPresentation() {
+        actions = nil
+        contextMenuDidOpen = nil
+        contextMenuDidClose = nil
+        contextMenuVisible = false
+    }
+
+    func configurePresentation(model: SidebarGroupHeaderRowModel) {
+        suspendPresentation()
+        guard self.model != model else { return }
+        self.model = model
+        applyModel(model)
+        needsLayout = true
+    }
+
     // MARK: Configure
 
     func configure(
