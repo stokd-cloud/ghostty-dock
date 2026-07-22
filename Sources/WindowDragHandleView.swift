@@ -552,6 +552,10 @@ struct TitlebarInteractiveControlRegion: NSViewRepresentable {
 
         override var mouseDownCanMoveWindow: Bool { false }
 
+        override func acceptsFirstMouse(for event: NSEvent?) -> Bool {
+            true
+        }
+
         deinit {
             MinimalModeTitlebarControlHitRegionRegistry.unregister(self)
         }
@@ -1348,6 +1352,7 @@ struct WindowDragHandleView: NSViewRepresentable {
             }
 
             if let window {
+                window.makeKey()
                 let previousMovableState = withTemporaryWindowMovableEnabled(window: window) {
                     window.performDrag(with: event)
                 }
