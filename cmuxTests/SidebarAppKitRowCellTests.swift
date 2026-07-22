@@ -147,10 +147,11 @@ struct SidebarAppKitRowCellTests {
 
     private static func makeActions(
         model: SidebarWorkspaceRowModel,
-        workspace: Workspace = Workspace(),
+        workspace: Workspace? = nil,
         onCommitRename: @escaping (String) -> Void = { _ in },
         onOpenStatusURL: @escaping (URL) -> Void = { _ in }
     ) -> SidebarAppKitRowActions {
+        let workspace = workspace ?? Workspace()
         let commands = SidebarWorkspaceRowCommands(
             tab: workspace,
             tabManager: nil,
