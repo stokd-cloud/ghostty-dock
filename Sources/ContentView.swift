@@ -6596,13 +6596,18 @@ struct ContentView: View {
     private func commandPaletteCommands(
         commandsContext: CommandPaletteCommandsContext
     ) -> [CommandPaletteCommand] {
+        commandPaletteActionRegistry(commandsContext: commandsContext).actions
+    }
+
+    private func commandPaletteActionRegistry(
+        commandsContext: CommandPaletteCommandsContext
+    ) -> CmuxActionRegistry {
         let context = commandsContext.snapshot
         let contributions = commandPaletteCommandContributions()
         var handlerRegistry = CommandPaletteHandlerRegistry()
         registerCommandPaletteHandlers(&handlerRegistry)
 
-        var commands: [CommandPaletteCommand] = []
-        commands.reserveCapacity(contributions.count)
+        var actionRegistry = CmuxActionRegistry()
         var nextRank = 0
 
         for contribution in contributions {
@@ -6616,42 +6621,48 @@ struct ContentView: View {
                 assertionFailure("No command palette handler registered for \(contribution.commandId)")
                 continue
             }
-            commands.append(
-                CommandPaletteCommand(
-                    id: contribution.commandId,
-                    rank: nextRank,
-                    title: configuredPaletteAction?.title ?? contribution.title(context),
-                    subtitle: configuredPaletteAction?.subtitle ?? contribution.subtitle(context),
-                    shortcutHint: commandPaletteShortcutHint(for: contribution, context: context),
-                    kindLabel: nil,
-                    keywords: configuredPaletteAction?.keywords.isEmpty == false
-                        ? configuredPaletteAction?.keywords ?? contribution.keywords
-                        : contribution.keywords,
-                    dismissOnRun: contribution.dismissOnRun,
-                    action: action
-                )
+            let command = CommandPaletteCommand(
+                id: contribution.commandId,
+                rank: nextRank,
+                title: configuredPaletteAction?.title ?? contribution.title(context),
+                subtitle: configuredPaletteAction?.subtitle ?? contribution.subtitle(context),
+                shortcutHint: commandPaletteShortcutHint(for: contribution, context: context),
+                kindLabel: nil,
+                keywords: configuredPaletteAction?.keywords.isEmpty == false
+                    ? configuredPaletteAction?.keywords ?? contribution.keywords
+                    : contribution.keywords,
+                dismissOnRun: contribution.dismissOnRun,
+                arguments: contribution.arguments,
+                handler: action
             )
+            guard actionRegistry.register(command) else {
+                assertionFailure("Duplicate command palette action id \(contribution.commandId)")
+                continue
+            }
             nextRank += 1
         }
 
-        return commands
+        return actionRegistry
     }
 
     private func handleCommandPaletteControlRequest(_ request: CommandPaletteControlRequest) {
         let terminalOpenTargets = resolveCommandPaletteTerminalOpenTargets(for: .commands)
-        let commands = commandPaletteCommands(
+        let actionRegistry = commandPaletteActionRegistry(
             commandsContext: commandPaletteCommandsContext(terminalOpenTargets: terminalOpenTargets)
         )
         switch request.operation {
         case .list:
-            request.complete(.listed(commands.map(commandPaletteControlItem)))
-        case .run(let commandID):
-            guard let command = commands.first(where: { $0.id == commandID }) else {
+            request.complete(.listed(actionRegistry.actions.map(commandPaletteControlItem)))
+        case .run(let commandID, let arguments):
+            guard let command = actionRegistry.action(id: commandID) else {
                 request.complete(.commandNotFound)
                 return
             }
-            request.complete(.ran(commandPaletteControlItem(command)))
-            runCommandPaletteCommand(command)
+            let result = runCommandPaletteCommand(
+                command,
+                invocation: CmuxActionInvocation(source: .automation, arguments: arguments)
+            )
+            request.complete(.ran(commandPaletteControlItem(command), result: result))
         }
     }
 
@@ -6664,7 +6675,8 @@ struct ContentView: View {
             subtitle: command.subtitle,
             shortcutHint: command.shortcutHint,
             keywords: command.keywords,
-            dismissOnRun: command.dismissOnRun
+            dismissOnRun: command.dismissOnRun,
+            arguments: command.arguments
         )
     }
 
@@ -6989,7 +7001,8 @@ struct ContentView: View {
                 commandId: "palette.openFolder",
                 title: constant(String(localized: "command.openFolder.title", defaultValue: "Open Folder…")),
                 subtitle: constant(String(localized: "command.openFolder.subtitle", defaultValue: "Workspace")),
-                keywords: ["open", "folder", "repository", "project", "directory"]
+                keywords: ["open", "folder", "repository", "project", "directory"],
+                arguments: [CmuxActionArgumentDefinition(name: "path", valueType: .path)]
             )
         )
         contributions.append(
@@ -7008,6 +7021,7 @@ struct ContentView: View {
                     )
                 ),
                 keywords: ["open", "folder", "directory", "project", "vs", "code", "inline", "editor", "browser"],
+                arguments: [CmuxActionArgumentDefinition(name: "path", valueType: .path)],
                 when: { _ in TerminalDirectoryOpenTarget.vscodeInline.isAvailable() }
             )
         )
@@ -7299,6 +7313,7 @@ struct ContentView: View {
                 subtitle: workspaceSubtitle,
                 keywords: ["rename", "workspace", "title"],
                 dismissOnRun: false,
+                arguments: [CmuxActionArgumentDefinition(name: "name", allowsEmpty: true)],
                 when: { $0.bool(CommandPaletteContextKeys.hasWorkspace) }
             )
         )
@@ -7309,6 +7324,7 @@ struct ContentView: View {
                 subtitle: workspaceSubtitle,
                 keywords: ["edit", "workspace", "description", "notes", "markdown"],
                 dismissOnRun: false,
+                arguments: [CmuxActionArgumentDefinition(name: "description", allowsEmpty: true)],
                 when: { $0.bool(CommandPaletteContextKeys.hasWorkspace) }
             )
         )
@@ -7480,6 +7496,7 @@ struct ContentView: View {
                 subtitle: panelSubtitle,
                 keywords: ["rename", "tab", "title"],
                 dismissOnRun: false,
+                arguments: [CmuxActionArgumentDefinition(name: "name", allowsEmpty: true)],
                 when: { $0.bool(CommandPaletteContextKeys.hasFocusedPanel) }
             )
         )
@@ -8188,7 +8205,14 @@ struct ContentView: View {
             }
         }
         registerAgentChatCommandPaletteHandler(&registry)
-        registry.register(commandId: "palette.openFolder") {
+        registry.register(commandId: "palette.openFolder") { invocation in
+            if let path = invocation.string("path") {
+                guard let directoryURL = commandPaletteDirectoryURL(path) else {
+                    return commandPaletteDirectoryUnavailableResult()
+                }
+                tabManager.addWorkspace(workingDirectory: directoryURL.path)
+                return .completed
+            }
             // Defer so the command palette dismisses before the modal sheet appears.
             DispatchQueue.main.async {
                 let panel = NSOpenPanel()
@@ -8201,11 +8225,31 @@ struct ContentView: View {
                     tabManager.addWorkspace(workingDirectory: url.path)
                 }
             }
+            return .presented
         }
-        registry.register(commandId: "palette.openFolderInVSCodeInline") {
+        registry.register(commandId: "palette.openFolderInVSCodeInline") { invocation in
+            if let path = invocation.string("path") {
+                guard let directoryURL = commandPaletteDirectoryURL(path) else {
+                    return commandPaletteDirectoryUnavailableResult()
+                }
+                guard AppDelegate.shared?.openDirectoryInInlineVSCode(
+                    directoryURL,
+                    tabManager: tabManager
+                ) == true else {
+                    return .failed(
+                        code: "open_failed",
+                        message: String(
+                            localized: "action.error.inlineVSCodeOpenFailed",
+                            defaultValue: "VS Code (Inline) could not open the directory."
+                        )
+                    )
+                }
+                return .completed
+            }
             DispatchQueue.main.async {
                 AppDelegate.shared?.showOpenFolderInInlineVSCodePanel(tabManager: tabManager)
             }
+            return .presented
         }
         registry.register(commandId: "palette.reopenPreviousSession") {
             if AppDelegate.shared?.reopenPreviousSession() != true {
@@ -8381,11 +8425,33 @@ struct ContentView: View {
         }
         registerSettingsToggleCommandHandlers(&registry)
 
-        registry.register(commandId: "palette.renameWorkspace") {
+        registry.register(commandId: "palette.renameWorkspace") { invocation in
+            if let proposedName = invocation.string("name") {
+                guard let workspace = tabManager.selectedWorkspace else {
+                    return commandPaletteTargetUnavailableResult()
+                }
+                tabManager.setCustomTitle(
+                    tabId: workspace.id,
+                    title: normalizedCommandPaletteName(proposedName)
+                )
+                return .completed
+            }
             beginRenameWorkspaceFlow()
+            return .presented
         }
-        registry.register(commandId: "palette.editWorkspaceDescription") {
+        registry.register(commandId: "palette.editWorkspaceDescription") { invocation in
+            if let proposedDescription = invocation.string("description") {
+                guard let workspace = tabManager.selectedWorkspace else {
+                    return commandPaletteTargetUnavailableResult()
+                }
+                tabManager.setCustomDescription(
+                    tabId: workspace.id,
+                    description: proposedDescription
+                )
+                return .completed
+            }
             beginWorkspaceDescriptionFlow()
+            return .presented
         }
         registry.register(commandId: "palette.clearWorkspaceName") {
             guard let workspace = tabManager.selectedWorkspace else {
@@ -8474,8 +8540,19 @@ struct ContentView: View {
         }
         registerIdentifierCopyCommandHandlers(&registry)
 
-        registry.register(commandId: "palette.renameTab") {
+        registry.register(commandId: "palette.renameTab") { invocation in
+            if let proposedName = invocation.string("name") {
+                guard let panelContext = focusedPanelContext else {
+                    return commandPaletteTargetUnavailableResult()
+                }
+                panelContext.workspace.setPanelCustomTitle(
+                    panelId: panelContext.panelId,
+                    title: normalizedCommandPaletteName(proposedName)
+                )
+                return .completed
+            }
             beginRenameTabFlow()
+            return .presented
         }
         registry.register(commandId: "palette.clearTabName") {
             guard let panelContext = focusedPanelContext else {
@@ -9121,15 +9198,21 @@ struct ContentView: View {
         }
     }
 
-    private func runCommandPaletteCommand(_ command: CommandPaletteCommand) {
+    @discardableResult
+    private func runCommandPaletteCommand(
+        _ command: CommandPaletteCommand,
+        invocation: CmuxActionInvocation = CmuxActionInvocation(source: .commandPalette)
+    ) -> CmuxActionExecutionResult {
 #if DEBUG
         cmuxDebugLog("palette.run commandId=\(command.id) dismissOnRun=\(command.dismissOnRun ? 1 : 0)")
 #endif
         let postRunFocusTarget = commandPalettePostRunFocusTarget(for: command)
         recordCommandPaletteUsage(command.id)
+        if invocation.source == .automation {
+            return command.execute(invocation)
+        }
         guard isCommandPalettePresented else {
-            command.action()
-            return
+            return command.execute(invocation)
         }
         if command.dismissOnRun,
            Self.commandPaletteShouldDismissBeforeRun(forCommandId: command.id) {
@@ -9138,10 +9221,9 @@ struct ContentView: View {
             } else {
                 dismissCommandPalette(restoreFocus: false)
             }
-            command.action()
-            return
+            return command.execute(invocation)
         }
-        command.action()
+        let result = command.execute(invocation)
         if command.dismissOnRun {
             if let postRunFocusTarget {
                 dismissCommandPalette(restoreFocus: true, preferredFocusTarget: postRunFocusTarget)
@@ -9149,6 +9231,7 @@ struct ContentView: View {
                 dismissCommandPalette(restoreFocus: false)
             }
         }
+        return result
     }
 
     private func commandPalettePostRunFocusTarget(for command: CommandPaletteCommand) -> CommandPaletteRestoreFocusTarget? {
@@ -9831,6 +9914,42 @@ struct ContentView: View {
         startRenameFlow(target)
     }
 
+    private func normalizedCommandPaletteName(_ proposedName: String) -> String? {
+        let trimmedName = proposedName.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmedName.isEmpty ? nil : trimmedName
+    }
+
+    private func commandPaletteDirectoryURL(_ path: String) -> URL? {
+        let expandedPath = NSString(string: path).expandingTildeInPath
+        let directoryURL = URL(fileURLWithPath: expandedPath, isDirectory: true).standardizedFileURL
+        var isDirectory: ObjCBool = false
+        guard FileManager.default.fileExists(atPath: directoryURL.path, isDirectory: &isDirectory),
+              isDirectory.boolValue else {
+            return nil
+        }
+        return directoryURL
+    }
+
+    private func commandPaletteDirectoryUnavailableResult() -> CmuxActionExecutionResult {
+        .failed(
+            code: "directory_not_found",
+            message: String(
+                localized: "action.error.directoryUnavailable",
+                defaultValue: "The directory does not exist or is not a folder."
+            )
+        )
+    }
+
+    private func commandPaletteTargetUnavailableResult() -> CmuxActionExecutionResult {
+        .failed(
+            code: "target_unavailable",
+            message: String(
+                localized: "action.error.targetUnavailable",
+                defaultValue: "The action target is no longer available."
+            )
+        )
+    }
+
     private func beginWorkspaceDescriptionFlow() {
         guard let workspace = tabManager.selectedWorkspace else {
             NSSound.beep()
@@ -9899,8 +10018,7 @@ struct ContentView: View {
     }
 
     private func applyRenameFlow(target: CommandPaletteRenameTarget, proposedName: String) {
-        let trimmedName = proposedName.trimmingCharacters(in: .whitespacesAndNewlines)
-        let normalizedName: String? = trimmedName.isEmpty ? nil : trimmedName
+        let normalizedName = normalizedCommandPaletteName(proposedName)
 
         switch target.kind {
         case .workspace(let workspaceId):

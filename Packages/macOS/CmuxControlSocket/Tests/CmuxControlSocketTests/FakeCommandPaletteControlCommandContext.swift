@@ -8,7 +8,11 @@ final class FakeCommandPaletteControlCommandContext: ControlCommandContext {
     var inlineVSCodeResolution: ControlInlineVSCodeOpenResolution = .tabManagerUnavailable
 
     private(set) var listRouting: ControlRoutingSelectors?
-    private(set) var runCall: (routing: ControlRoutingSelectors, commandID: String)?
+    private(set) var runCall: (
+        routing: ControlRoutingSelectors,
+        commandID: String,
+        arguments: [String: String]
+    )?
     private(set) var inlineVSCodeCall: (routing: ControlRoutingSelectors, directoryPath: String)?
 
     func controlCommandPaletteList(
@@ -20,9 +24,10 @@ final class FakeCommandPaletteControlCommandContext: ControlCommandContext {
 
     func controlCommandPaletteRun(
         routing: ControlRoutingSelectors,
-        commandID: String
+        commandID: String,
+        arguments: [String: String]
     ) -> ControlCommandPaletteRunResolution {
-        runCall = (routing, commandID)
+        runCall = (routing, commandID, arguments)
         return runResolution
     }
 

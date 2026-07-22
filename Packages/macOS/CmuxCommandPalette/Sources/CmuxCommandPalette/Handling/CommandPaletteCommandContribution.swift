@@ -16,6 +16,8 @@ public struct CommandPaletteCommandContribution {
     public let keywords: [String]
     /// Whether activating the command dismisses the palette.
     public let dismissOnRun: Bool
+    /// Static argument contract shared by palette and automation adapters.
+    public let arguments: [CmuxActionArgumentDefinition]
     /// Whether the command appears at all in this context.
     public let when: (CommandPaletteContextSnapshot) -> Bool
     /// Whether the command is enabled in this context.
@@ -29,6 +31,7 @@ public struct CommandPaletteCommandContribution {
         shortcutHint: String? = nil,
         keywords: [String] = [],
         dismissOnRun: Bool = true,
+        arguments: [CmuxActionArgumentDefinition] = [],
         when: @escaping (CommandPaletteContextSnapshot) -> Bool = { _ in true },
         enablement: @escaping (CommandPaletteContextSnapshot) -> Bool = { _ in true }
     ) {
@@ -38,6 +41,7 @@ public struct CommandPaletteCommandContribution {
         self.shortcutHint = shortcutHint
         self.keywords = keywords
         self.dismissOnRun = dismissOnRun
+        self.arguments = arguments
         self.when = when
         self.enablement = enablement
     }

@@ -57,9 +57,43 @@ extension ControlCommandCoordinator {
                 data: nil
             )
         }
+        let arguments: [String: String]
+        if let rawArguments = params["arguments"] {
+            guard case .object(let object) = rawArguments else {
+                return .err(
+                    code: "invalid_params",
+                    message: String(
+                        localized: "socket.palette.error.argumentsObject",
+                        defaultValue: "'arguments' must be an object of string values",
+                        bundle: .main
+                    ),
+                    data: nil
+                )
+            }
+            var parsed: [String: String] = [:]
+            parsed.reserveCapacity(object.count)
+            for (name, value) in object {
+                guard case .string(let stringValue) = value else {
+                    return .err(
+                        code: "invalid_params",
+                        message: String(
+                            localized: "socket.palette.error.argumentsObject",
+                            defaultValue: "'arguments' must be an object of string values",
+                            bundle: .main
+                        ),
+                        data: .object(["argument": .string(name)])
+                    )
+                }
+                parsed[name] = stringValue
+            }
+            arguments = parsed
+        } else {
+            arguments = [:]
+        }
         let resolution = commandPaletteContext?.controlCommandPaletteRun(
             routing: routingSelectors(params),
-            commandID: commandID
+            commandID: commandID,
+            arguments: arguments
         ) ?? .windowNotFound
         switch resolution {
         case .windowNotFound:
@@ -82,11 +116,55 @@ extension ControlCommandCoordinator {
                 ),
                 data: .object(["command_id": .string(commandID)])
             )
-        case .ran(let windowID, let command):
+        case .completed(let windowID, let command):
             return .ok(.object([
                 "window_id": .string(windowID.uuidString),
                 "command": commandPalettePayload(command),
+                "status": .string("completed"),
             ]))
+        case .presented(let windowID, let command):
+            return .ok(.object([
+                "window_id": .string(windowID.uuidString),
+                "command": commandPalettePayload(command),
+                "status": .string("presented"),
+            ]))
+        case .requiresArguments(let windowID, let command, let arguments):
+            return .err(
+                code: "invalid_params",
+                message: String(
+                    localized: "socket.palette.error.missingArguments",
+                    defaultValue: "Missing required action arguments",
+                    bundle: .main
+                ),
+                data: .object([
+                    "window_id": .string(windowID.uuidString),
+                    "command": commandPalettePayload(command),
+                    "required_arguments": .array(arguments.map(commandPaletteArgumentPayload)),
+                ])
+            )
+        case .invalidArguments(let windowID, let command, let names):
+            return .err(
+                code: "invalid_params",
+                message: String(
+                    localized: "socket.palette.error.unknownArguments",
+                    defaultValue: "The action does not declare one or more supplied arguments",
+                    bundle: .main
+                ),
+                data: .object([
+                    "window_id": .string(windowID.uuidString),
+                    "command": commandPalettePayload(command),
+                    "unknown_arguments": .array(names.map(JSONValue.string)),
+                ])
+            )
+        case .failed(let windowID, let command, let code, let message):
+            return .err(
+                code: code,
+                message: message,
+                data: .object([
+                    "window_id": .string(windowID.uuidString),
+                    "command": commandPalettePayload(command),
+                ])
+            )
         }
     }
 
@@ -99,6 +177,19 @@ extension ControlCommandCoordinator {
             "shortcut_hint": command.shortcutHint.map(JSONValue.string) ?? .null,
             "keywords": .array(command.keywords.map(JSONValue.string)),
             "dismiss_on_run": .bool(command.dismissOnRun),
+            "arguments": .array(command.arguments.map(commandPaletteArgumentPayload)),
+        ])
+    }
+
+    /// Encodes one static action argument contract.
+    private func commandPaletteArgumentPayload(
+        _ argument: ControlCommandPaletteArgument
+    ) -> JSONValue {
+        .object([
+            "name": .string(argument.name),
+            "type": .string(argument.type),
+            "required": .bool(argument.required),
+            "allows_empty": .bool(argument.allowsEmpty),
         ])
     }
 }
