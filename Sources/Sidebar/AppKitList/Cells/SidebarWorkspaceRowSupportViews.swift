@@ -546,6 +546,21 @@ final class SidebarRowChecklistSection: NSView {
         needsLayout = true
     }
 
+    func suspendPresentation(commitEdits: Bool) {
+        if commitEdits, isAdding, !addField.isHidden {
+            addField.onCommit?(addField.stringValue)
+        }
+        addField.onCommit = nil
+        addField.onCancel = nil
+        if let popover {
+            popover.close()
+            popover.contentViewController = nil
+            self.popover = nil
+        }
+        actions = nil
+        model = nil
+    }
+
     private func beginAdding() {
         guard let model else { return }
         actions?.onConsumeChecklistAddFieldActivation()

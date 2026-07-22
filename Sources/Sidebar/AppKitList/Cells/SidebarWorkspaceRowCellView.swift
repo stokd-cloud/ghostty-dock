@@ -218,7 +218,7 @@ final class SidebarWorkspaceRowTableCellView: NSTableCellView {
 
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
-        if window == nil { suspendPresentation() }
+        if window == nil { suspendPresentation(commitEdits: true) }
     }
 
     func setPresentationActive(_ isActive: Bool) {
@@ -227,7 +227,16 @@ final class SidebarWorkspaceRowTableCellView: NSTableCellView {
         trailingSpinner?.isPresentationActive = isActive
     }
 
-    func suspendPresentation() {
+    func suspendPresentation(commitEdits: Bool = false) {
+        if commitEdits, isEditing {
+            let commitRename = actions?.commitRename
+            let text = renameField.stringValue
+            endInlineRename(commit: true)
+            commitRename?(text)
+        }
+        renameField.onCommit = nil
+        renameField.onCancel = nil
+        checklistSection.suspendPresentation(commitEdits: commitEdits)
         actions = nil
         contextMenuDidOpen = nil
         contextMenuDidClose = nil

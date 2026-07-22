@@ -148,6 +148,7 @@ struct SidebarAppKitRowCellTests {
     private static func makeActions(
         model: SidebarWorkspaceRowModel,
         workspace: Workspace = Workspace(),
+        onCommitRename: @escaping (String) -> Void = { _ in },
         onOpenStatusURL: @escaping (URL) -> Void = { _ in }
     ) -> SidebarAppKitRowActions {
         let commands = SidebarWorkspaceRowCommands(
@@ -182,7 +183,7 @@ struct SidebarAppKitRowCellTests {
             checklistRemoveItem: { _ in },
             checklistAddItem: { _ in },
             checklistEditItem: { _, _ in },
-            commitRename: { _ in }
+            commitRename: onCommitRename
         )
     }
 
@@ -308,6 +309,33 @@ struct SidebarAppKitRowCellTests {
         #expect(retainedWorkspace != nil)
         cell.suspendPresentation()
         #expect(retainedWorkspace == nil)
+    }
+
+    @Test
+    func suspensionCommitsInlineRenameBeforeReleasingActions() throws {
+        let model = Self.makeModel()
+        let cell = SidebarWorkspaceRowTableCellView()
+        var committedTitle: String?
+        cell.configure(
+            model: model,
+            actions: Self.makeActions(
+                model: model,
+                onCommitRename: { committedTitle = $0 }
+            ),
+            isPointerHovering: false,
+            contextMenuDidOpen: {},
+            contextMenuDidClose: {}
+        )
+        cell.beginInlineRename()
+        let field = try #require(
+            Self.descendants(of: cell).compactMap { $0 as? SidebarRowInlineRenameField }.first
+        )
+        field.stringValue = "Renamed while closing"
+
+        cell.suspendPresentation(commitEdits: true)
+
+        #expect(committedTitle == "Renamed while closing")
+        #expect(field.isHidden)
     }
 
     @Test
