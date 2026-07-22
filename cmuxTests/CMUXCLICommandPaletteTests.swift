@@ -55,6 +55,34 @@ extension CMUXCLIErrorOutputRegressionTests {
         #expect(params["command_id"] as? String == "palette.demo")
     }
 
+    @Test func paletteRunForwardsNamedArgumentsWithoutActionSpecificParserCode() throws {
+        let cliPath = try bundledCLIPath()
+        let socketPath = "/tmp/cmux-palargs-\(UUID().uuidString.prefix(8)).sock"
+        let responder = try UnixSocketResponder(
+            path: socketPath,
+            response: #"{"ok":true,"result":{"status":"completed","command":{"id":"palette.renameWorkspace","title":"Rename Workspace","subtitle":"Workspace","shortcut_hint":null,"keywords":[],"dismiss_on_run":false,"arguments":[{"name":"name","type":"string","required":true,"allows_empty":true}]}}}"#
+        )
+        defer { responder.stop() }
+
+        let result = runProcess(
+            executablePath: cliPath,
+            arguments: [
+                "--socket", socketPath,
+                "palette", "run", "palette.renameWorkspace",
+                "--arg", "name=api=worker",
+            ],
+            environment: commandPaletteCLIEnvironment(),
+            timeout: 5
+        )
+
+        #expect(!result.timedOut)
+        #expect(result.status == 0)
+        let request = try commandPaletteCLIRequest(try #require(responder.receivedRequests.first))
+        let params = try #require(request["params"] as? [String: Any])
+        #expect(params["command_id"] as? String == "palette.renameWorkspace")
+        #expect((params["arguments"] as? [String: String]) == ["name": "api=worker"])
+    }
+
     @Test func vscodeShorthandDefaultsToTheCurrentDirectory() throws {
         let cliPath = try bundledCLIPath()
         let socketPath = "/tmp/cmux-vscode-\(UUID().uuidString.prefix(8)).sock"
