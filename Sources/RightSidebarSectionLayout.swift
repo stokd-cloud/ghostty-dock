@@ -134,6 +134,20 @@ struct RightSidebarSectionLayout: Equatable, Sendable {
         }
     }
 
+    /// Applies the presentation toggle: accordion mode owns every stackable
+    /// section; classic mode owns none, so the old top-tab/single-panel host
+    /// returns exactly.
+    mutating func reconcilePresentation(
+        stackedTabsEnabled: Bool,
+        stackableModes: [RightSidebarMode]
+    ) {
+        if stackedTabsEnabled {
+            reconcileStackableModes(stackableModes)
+        } else {
+            sections.removeAll()
+        }
+    }
+
     /// Moves the section at `index`, or the collapsed run it starts, to `destination`.
     mutating func moveBlock(startingAt index: Int, to destination: Int) {
         guard sections.indices.contains(index) else { return }

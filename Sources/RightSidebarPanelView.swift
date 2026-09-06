@@ -144,10 +144,9 @@ extension RightSidebarMode {
     }
 }
 
-/// Right sidebar root view. Hosts a segmented mode picker plus the active panel.
-///
-/// When `sidebar.beta.dock.enabled` is on, the rail mounts ``SidebarDockPanelView``
-/// seeded with Files/Find/Vault; Feed/Dock keep non-rail presentation (VAL-FLAG-003).
+/// Right sidebar root view. Defaults to accordion sections for stackable tools;
+/// disabling `gdock.rightSidebarStackedTabs` restores the classic top-tab mode
+/// picker plus one active panel.
 struct RightSidebarPanelView: View {
     @ObservedObject var tabManager: TabManager
     @ObservedObject var fileExplorerStore: FileExplorerStore
@@ -177,8 +176,8 @@ struct RightSidebarPanelView: View {
     @State private var focusShortcutHintMonitor = WindowScopedShortcutHintModifierMonitor(activation: .commandOnly)
     @State private var closeShortcutHintMonitor = WindowScopedShortcutHintModifierMonitor(activation: .commandOnly)
     @State private var hasMountedRightSidebarContent = false
-    /// Tools dragged down out of the mode bar into their own stacked sections.
-    /// Empty means the sidebar renders exactly as it always has.
+    /// Stackable tools in accordion presentation. Empty means the classic
+    /// top-tab presentation owns the sidebar.
     @State private var sectionLayout = RightSidebarSectionLayout()
     @State private var keyboardShortcutSettingsObserver = KeyboardShortcutSettingsObserver.shared
     private let alwaysShowShortcutHints = ShortcutHintDebugSettings().alwaysShowHints
@@ -289,6 +288,10 @@ struct RightSidebarPanelView: View {
         }
         .onChange(of: rightSidebarStackedTabsEnabled) { _, enabled in
             refreshModeAvailabilityAndFocusIfNeeded()
+            sectionLayout.reconcilePresentation(
+                stackedTabsEnabled: enabled,
+                stackableModes: RightSidebarMode.stackableModes
+            )
             if enabled {
                 seedDockRailsIfNeeded()
             }
@@ -701,12 +704,10 @@ struct RightSidebarPanelView: View {
             }
         }
         .onAppear {
-            sectionLayout.reconcileStackableModes(RightSidebarMode.stackableModes)
-        }
-        .onChange(of: rightSidebarStackedTabsEnabled) { _, enabled in
-            if enabled {
-                sectionLayout.reconcileStackableModes(RightSidebarMode.stackableModes)
-            }
+            sectionLayout.reconcilePresentation(
+                stackedTabsEnabled: true,
+                stackableModes: RightSidebarMode.stackableModes
+            )
         }
     }
 
