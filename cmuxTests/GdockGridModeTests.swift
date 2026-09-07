@@ -377,4 +377,38 @@ import CmuxTerminalCore
         let zoomPanel = try #require(workspace.focusedPanelId)
         #expect(workspace.toggleSplitZoom(panelId: zoomPanel))
     }
+
+    @Test @MainActor
+    func autoGroupDoesNotInsertAHeaderWorkspaceWhenGridIsOn() throws {
+        let previousGrid = GdockGridModeSettings.isEnabled()
+        let previousGroup = GdockAutoWorkspaceGroupModeSettings.isEnabled()
+        GdockGridModeSettings.setEnabled(true)
+        GdockAutoWorkspaceGroupModeSettings.setEnabled(true)
+        defer {
+            GdockGridModeSettings.setEnabled(previousGrid)
+            GdockAutoWorkspaceGroupModeSettings.setEnabled(previousGroup)
+        }
+
+        let manager = TabManager()
+        let first = try #require(manager.selectedWorkspace)
+        let second = manager.addWorkspace(select: false)
+        let beforeIds = Set(manager.tabs.map(\.id))
+        #expect(beforeIds.count == 2)
+
+        let groupId = try #require(
+            manager.createWorkspaceGroup(
+                name: "stokd-cloud/gdock",
+                childWorkspaceIds: [first.id, second.id],
+                selectAnchor: false,
+                collapseSidebarSelection: false,
+                insertDedicatedAnchor: false
+            )
+        )
+
+        #expect(Set(manager.tabs.map(\.id)) == beforeIds)
+        let group = try #require(manager.workspaceGroups.first(where: { $0.id == groupId }))
+        #expect(group.anchorWorkspaceId == first.id)
+        #expect(first.groupId == groupId)
+        #expect(second.groupId == groupId)
+    }
 }
