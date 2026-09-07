@@ -13,10 +13,10 @@ public struct GdockCatalogSection: SettingCatalogSection {
         userDefaultsKey: "gdock.autoWorkspaceGroupMode"
     )
 
-    /// When enabled, the right sidebar renders dock rail tools as stacked tab sections.
+    /// When enabled, the right sidebar renders tools as accordion sections instead of top tabs.
     public let rightSidebarStackedTabs = DefaultsKey<Bool>(
         id: "gdock.rightSidebarStackedTabs",
-        defaultValue: false,
+        defaultValue: true,
         userDefaultsKey: "gdock.rightSidebarStackedTabs"
     )
 

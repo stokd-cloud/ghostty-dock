@@ -765,13 +765,15 @@ enum CommandPaletteSettingsToggleCommands {
                 title: {
                     String(
                         localized: "settings.gdock.rightSidebarStackedTabs",
-                        defaultValue: "Stack Right Sidebar Tabs"
+                        defaultValue: "Right Sidebar Accordion"
                     )
                 },
                 sectionTitle: gdock,
                 keywords: [
                     "gdock.rightSidebarStackedTabs",
                     "gdock",
+                    "accordion",
+                    "sections",
                     "right",
                     "sidebar",
                     "tabs",

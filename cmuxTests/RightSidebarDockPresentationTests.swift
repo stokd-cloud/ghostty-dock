@@ -16,14 +16,19 @@ struct RightSidebarDockPresentationTests {
         defer { defaults.removePersistentDomain(forName: suite) }
 
         #expect(defaults.object(forKey: RightSidebarDockPresentationSettings.userDefaultsKey) == nil)
+        #expect(RightSidebarDockPresentationSettings.isStackedTabsEnabled(defaults: defaults))
+        #expect(RightSidebarDockPresentationPolicy.usesStackedTabs(stackedTabsEnabled: true))
+        #expect(RightSidebarDockPresentationPolicy.hidesModeBar(stackedTabsEnabled: true))
+
+        defaults.set(false, forKey: RightSidebarDockPresentationSettings.userDefaultsKey)
         #expect(!RightSidebarDockPresentationSettings.isStackedTabsEnabled(defaults: defaults))
         #expect(!RightSidebarDockPresentationPolicy.usesStackedTabs(stackedTabsEnabled: false))
+        #expect(!RightSidebarDockPresentationPolicy.hidesModeBar(stackedTabsEnabled: false))
 
         defaults.set(true, forKey: RightSidebarDockPresentationSettings.userDefaultsKey)
         #expect(RightSidebarDockPresentationSettings.isStackedTabsEnabled(defaults: defaults))
         #expect(RightSidebarDockPresentationPolicy.usesStackedTabs(stackedTabsEnabled: true))
         #expect(RightSidebarDockPresentationPolicy.hidesModeBar(stackedTabsEnabled: true))
-        #expect(!RightSidebarDockPresentationPolicy.hidesModeBar(stackedTabsEnabled: false))
     }
 
     @Test func allSidebarToolsIncludingWorkAreStackable() {
@@ -52,7 +57,7 @@ struct RightSidebarDockPresentationTests {
         let key = SettingCatalog().gdock.rightSidebarStackedTabs
         #expect(key.id == "gdock.rightSidebarStackedTabs")
         #expect(key.userDefaultsKey == RightSidebarDockPresentationSettings.userDefaultsKey)
-        #expect(key.defaultValue == false)
+        #expect(key.defaultValue == true)
         #expect(CmuxSettingsFileStore.supportedSettingsJSONPaths.contains("gdock.rightSidebarStackedTabs"))
 
         let descriptor = try #require(

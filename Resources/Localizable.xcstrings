@@ -179099,13 +179099,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Stack Right Sidebar Tabs"
+            "value" : "Right Sidebar Accordion"
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "右サイドバーのタブをスタック表示"
+            "value" : "右サイドバーのアコーディオン"
           }
         }
       }

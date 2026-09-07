@@ -163,6 +163,24 @@ import Testing
         #expect(subject.sections[0] == filesBefore)
     }
 
+    @Test func disabledPresentationClearsSectionsForClassicTopTabs() {
+        var subject = Layout()
+        subject.reconcilePresentation(
+            stackedTabsEnabled: true,
+            stackableModes: RightSidebarMode.stackableModes
+        )
+        #expect(subject.modes == [.files, .find, .sessions, .stokdWork])
+
+        subject.setCollapsed(true, for: .files)
+        subject.reconcilePresentation(
+            stackedTabsEnabled: false,
+            stackableModes: RightSidebarMode.stackableModes
+        )
+
+        #expect(subject.isEmpty)
+        #expect(subject.resolvedHeights(totalHeight: 500).isEmpty)
+    }
+
     @Test func resizingOutOfRangeIndexIsIgnored() {
         var subject = layout([.files, .find])
         let before = subject.sections
