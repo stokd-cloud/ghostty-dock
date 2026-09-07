@@ -266,34 +266,37 @@ one user exception and already exists.
 
 ## AX-GDOCK-AUTO-GROUP-SPAWN-BOUNDED
 
-Auto Workspace Group Mode MUST NOT unbounded-create workspaces or live
-PTYs. One reconcile MAY create at most one new header workspace per
-`owner/repo` slug. Grid placeholder cells MUST NOT be extracted. Grid
-compaction MUST NOT close a group-header workspace.
+Auto Workspace Group Mode MUST NOT create a new workspace or live PTY
+to form a group. The first existing member of an `owner/repo` slug
+becomes the group header. Grid placeholder cells MUST NOT be extracted.
+Grid compaction MUST NOT close a group-header workspace.
 `gdock.autoWorkspaceGroupMode` defaults on only after these bounds exist.
 
 ### Why
 
-Turning Auto Workspace Group Mode on calls `createWorkspaceGroup`, which
-inserts a new live terminal workspace per `owner/repo`. Grid Mode then
-2x2-fills that workspace. Placeholder cells can be extracted, and
-compaction can close a group header, which retriggers grouping. That is
-the sidebar-filling spawn.
+`createWorkspaceGroup` used to insert a new live header workspace per
+`owner/repo`. Grid Mode then 2×2-filled that header and could spill
+more workspaces, which auto-group grouped again. One-header-per-slug
+still spawned a PTY per repo. That is the sidebar-filling spew with
+both modes on.
 
 ### How to apply
 
-1. One reconcile may create at most one new header workspace per
-   `owner/repo` slug.
+1. Auto-group `createGroup` adopts `childWorkspaceIds.first` as
+   `anchorWorkspaceId`. Do not call `createGroupAnchorWorkspace` /
+   `addWorkspace`.
 2. Skip `gdockGridPlaceholderPanelIds` from auto-group extract.
 3. Grid compaction with `groupByRepository` must retain every
    group-anchor workspace.
-4. Flip `gdock.autoWorkspaceGroupMode` default to true only in the same
-   change as these bounds.
+4. Do not schedule grid reconcile as a consequence of auto-group
+   membership changes (no new workspace means `addWorkspace` does
+   not fire).
 
 ### Acceptance Checks
 
 - Runnable:
   `./scripts/test-unit.sh test -only-testing:cmuxTests/GdockAutoWorkspaceGroupReconcilerTests -only-testing:cmuxTests/GdockGridModeTests`
+- Auto-group of K slugs with grid on: workspace count before == after.
 - Reconciler plan skips panels listed as grid placeholders.
 - Compaction planner with `groupByRepository` retains every group-anchor
   id even when that workspace has fewer real panels than capacity.

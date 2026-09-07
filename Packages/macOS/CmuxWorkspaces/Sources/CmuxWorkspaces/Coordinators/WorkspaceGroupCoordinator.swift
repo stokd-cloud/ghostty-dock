@@ -28,20 +28,20 @@ public final class WorkspaceGroupCoordinator<Tab: WorkspaceTabRepresenting> {
 
     // MARK: - Creation
 
-    /// Create a new group, inserting a fresh anchor workspace above the given
-    /// child workspaces. Returns the new group id.
+    /// Create a new group around `childWorkspaceIds`. Returns the new group id.
     ///
-    /// The anchor is always brand new (never promoted from an existing
-    /// workspace). Its cwd defaults to `anchorWorkingDirectory`, or the first
-    /// eligible child's cwd, or whatever the host's workspace creation
-    /// resolves on its own.
+    /// When `insertDedicatedAnchor` is true (manual ⌘⇧G), a fresh header
+    /// workspace is inserted above the children. Auto Workspace Group Mode
+    /// passes false so the first eligible child *is* the header — no extra
+    /// live PTY for Grid Mode to 2×2-fill (AX-GDOCK-AUTO-GROUP-SPAWN-BOUNDED).
     @discardableResult
     public func createWorkspaceGroup(
         name: String,
         childWorkspaceIds: [UUID] = [],
         anchorWorkingDirectory: String? = nil,
         selectAnchor: Bool = true,
-        collapseSidebarSelection: Bool = true
+        collapseSidebarSelection: Bool = true,
+        insertDedicatedAnchor: Bool = true
     ) -> UUID? {
         guard let host else { return nil }
         // Eligible children: not currently an anchor of a different group.
@@ -62,16 +62,28 @@ public final class WorkspaceGroupCoordinator<Tab: WorkspaceTabRepresenting> {
         let firstChildTab = eligibleChildren.first.flatMap { firstId in
             model.tabs.first(where: { $0.id == firstId })
         }
-        let inferredCwd: String? = anchorWorkingDirectory
-            ?? firstChildTab?.currentDirectory
         let originalTabOrder = model.tabs.map(\.id)
 
-        let anchor = host.createGroupAnchorWorkspace(
-            title: resolvedName,
-            workingDirectory: inferredCwd,
-            inheritWorkingDirectory: inferredCwd == nil,
-            select: selectAnchor
-        )
+        let anchor: Tab
+        let memberIds: [UUID]
+        if insertDedicatedAnchor {
+            let inferredCwd: String? = anchorWorkingDirectory
+                ?? firstChildTab?.currentDirectory
+            anchor = host.createGroupAnchorWorkspace(
+                title: resolvedName,
+                workingDirectory: inferredCwd,
+                inheritWorkingDirectory: inferredCwd == nil,
+                select: selectAnchor
+            )
+            memberIds = eligibleChildren
+        } else {
+            guard let adopted = firstChildTab else { return nil }
+            anchor = adopted
+            memberIds = Array(eligibleChildren.dropFirst())
+            if selectAnchor {
+                host.selectWorkspace(anchor)
+            }
+        }
 
         let group = WorkspaceGroup(
             id: UUID(),
@@ -84,15 +96,19 @@ public final class WorkspaceGroupCoordinator<Tab: WorkspaceTabRepresenting> {
         )
         model.workspaceGroups.append(group)
         anchor.groupId = group.id
-        for id in eligibleChildren {
+        for id in memberIds {
             model.assignGroup(workspaceId: id, groupId: group.id)
         }
-        placeNewWorkspaceGroupAtCreationPosition(
-            groupId: group.id,
-            anchorId: anchor.id,
-            childWorkspaceIds: eligibleChildren,
-            originalTabOrder: originalTabOrder
-        )
+        if insertDedicatedAnchor {
+            placeNewWorkspaceGroupAtCreationPosition(
+                groupId: group.id,
+                anchorId: anchor.id,
+                childWorkspaceIds: memberIds,
+                originalTabOrder: originalTabOrder
+            )
+        } else {
+            model.normalizeWorkspaceGroupContiguity()
+        }
         // Collapse the sidebar multi-selection so a second ⌘⇧G press doesn't
         // immediately reuse the same child ids and create a duplicate group
         // around them. The new anchor is the only sensible "current"
@@ -111,7 +127,7 @@ public final class WorkspaceGroupCoordinator<Tab: WorkspaceTabRepresenting> {
                 anchorId: anchor.id
             )
         }
-        host.workspaceOrderDidChange(movedWorkspaceIds: [anchor.id] + eligibleChildren)
+        host.workspaceOrderDidChange(movedWorkspaceIds: [anchor.id] + memberIds)
         return group.id
     }
 

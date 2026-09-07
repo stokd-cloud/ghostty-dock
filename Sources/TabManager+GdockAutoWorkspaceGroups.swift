@@ -66,7 +66,8 @@ extension TabManager {
                     name: name,
                     childWorkspaceIds: memberWorkspaceIds,
                     selectAnchor: false,
-                    collapseSidebarSelection: false
+                    collapseSidebarSelection: false,
+                    insertDedicatedAnchor: false
                 )
             case .addToGroup(let workspaceId, let groupId):
                 addWorkspaceToGroup(workspaceId: workspaceId, groupId: groupId)
@@ -122,7 +123,8 @@ extension TabManager {
                 name: slug,
                 childWorkspaceIds: [move.destinationWorkspaceId],
                 selectAnchor: false,
-                collapseSidebarSelection: false
+                collapseSidebarSelection: false,
+                insertDedicatedAnchor: false
             )
         }
     }

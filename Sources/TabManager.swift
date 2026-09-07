@@ -1980,14 +1980,16 @@ class TabManager: ObservableObject {
         childWorkspaceIds: [UUID] = [],
         anchorWorkingDirectory: String? = nil,
         selectAnchor: Bool = true,
-        collapseSidebarSelection: Bool = true
+        collapseSidebarSelection: Bool = true,
+        insertDedicatedAnchor: Bool = true
     ) -> UUID? {
         workspaceGrouping.createWorkspaceGroup(
             name: name,
             childWorkspaceIds: childWorkspaceIds,
             anchorWorkingDirectory: anchorWorkingDirectory,
             selectAnchor: selectAnchor,
-            collapseSidebarSelection: collapseSidebarSelection
+            collapseSidebarSelection: collapseSidebarSelection,
+            insertDedicatedAnchor: insertDedicatedAnchor
         )
     }
 

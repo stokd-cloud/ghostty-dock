@@ -766,6 +766,33 @@ struct WorkspaceCoordinatorTests {
     // MARK: Groups
 
     @Test
+    func createWorkspaceGroupWithoutDedicatedAnchorPromotesFirstChild() throws {
+        let (model, host, groups, _) = makeWorld()
+        let child1 = CoordinatorStubTab()
+        let other = CoordinatorStubTab()
+        let child2 = CoordinatorStubTab()
+        model.tabs = [child1, other, child2]
+        let beforeCount = model.tabs.count
+
+        let groupId = try #require(groups.createWorkspaceGroup(
+            name: "owner/repo",
+            childWorkspaceIds: [child1.id, child2.id],
+            selectAnchor: false,
+            collapseSidebarSelection: false,
+            insertDedicatedAnchor: false
+        ))
+
+        let group = try #require(model.workspaceGroups.first(where: { $0.id == groupId }))
+        #expect(model.tabs.count == beforeCount)
+        #expect(group.anchorWorkspaceId == child1.id)
+        #expect(child1.groupId == groupId)
+        #expect(child2.groupId == groupId)
+        #expect(other.groupId == nil)
+        #expect(model.tabs.map(\.id) == [child1.id, child2.id, other.id])
+        _ = host
+    }
+
+    @Test
     func createWorkspaceGroupAdoptsChildrenAndKeepsSectionContiguous() throws {
         let (model, host, groups, _) = makeWorld()
         let child1 = CoordinatorStubTab()
